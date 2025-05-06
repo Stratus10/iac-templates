@@ -1,5 +1,5 @@
 # Infrastructure as Code Templates
-A collection of Infrastructure as Code templates for use in AWS.
+A collection of Infrastructure as Code templates for use in AWS. For more information see https://Stratus10.com
 
 |Template Name|Description|
 |-|-|
