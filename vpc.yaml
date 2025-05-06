@@ -1,0 +1,557 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VPC with 3 public subnets, 3 private subnets, and 3 database subnets.
+
+Parameters:
+  EnvironmentName:
+    Description: Environment Name
+    Type: String
+  VPCCIDRBlock:
+    Description: "The CIDR Block range for the VPC. Ex: 10.0.0.0/16"
+    Type: String
+    Default: "10.0.0.0/16"
+
+Resources:
+  ############################ BEGIN VPC Networking ############################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDRBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [!Ref EnvironmentName, "VPC"],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+
+  VPCInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              "-",
+              [
+                !Ref EnvironmentName,
+                "InternetGateway",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+
+  InternetGatewayVPCAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref VPCInternetGateway
+      VpcId: !Ref VPC
+  ############################ END VPC Networking ############################
+
+  ############################ BEGIN OF PUBLIC TIER ############################
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!Ref VPCCIDRBlock, 10, 12]]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PublicSubnet1",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "public"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!Ref VPCCIDRBlock, 10, 12]]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PublicSubnet2",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "public"
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!Ref VPCCIDRBlock, 10, 12]]
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PublicSubnet3",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "public"
+
+  PublicSubnetsRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PublicSubnetsRouteTable",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "public"
+
+  PublicSubnetsEgressRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VPCInternetGateway
+      RouteTableId: !Ref PublicSubnetsRouteTable
+    DependsOn: InternetGatewayVPCAttachment
+
+  PublicSubnetAZ1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicSubnetsRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnetAZ2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicSubnetsRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnetAZ3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicSubnetsRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  # NAT Gateways
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "NATGateway1",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "public"
+  
+  NATGateway2:
+     Type: AWS::EC2::NatGateway
+     Properties:
+       AllocationId: !GetAtt NATGateway2EIP.AllocationId
+       SubnetId: !Ref PublicSubnet2
+       Tags:
+         - Key: Name
+           Value: !Join [ ' ', [!Ref EnvironmentName, 'NATGateway2' ] ]
+         - Key: "environment"
+           Value: !Ref EnvironmentName
+         - Key: "tier"
+           Value: "public"
+
+  NATGateway3:
+     Type: AWS::EC2::NatGateway
+     Properties:
+       AllocationId: !GetAtt NATGateway3EIP.AllocationId
+       SubnetId: !Ref PublicSubnet3
+       Tags:
+         - Key: Name
+           Value: !Join [ ' ', [!Ref EnvironmentName, 'NATGateway3' ] ]
+         - Key: "environment"
+           Value: !Ref EnvironmentName
+         - Key: "tier"
+           Value: "public"
+
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Join [ ' ', [!Ref EnvironmentName, "EIP", 1 ] ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+
+  NATGateway2EIP:
+     Type: AWS::EC2::EIP
+     Properties:
+       Domain: vpc
+       Tags:
+         - Key: Name
+           Value: !Join [ ' ', [!Ref EnvironmentName, "EIP", 2 ] ]
+         - Key: "environment"
+           Value: !Ref EnvironmentName
+  
+  NATGateway3EIP:
+     Type: AWS::EC2::EIP
+     Properties:
+       Domain: vpc
+       Tags:
+         - Key: Name
+           Value: !Join [ ' ', [!Ref EnvironmentName, 'EIP', 3 ] ]
+         - Key: "environment"
+           Value: !Ref EnvironmentName
+
+  ############################ END OF PUBLIC TIER ############################
+
+  ############################ BEGIN OF PRIVATE TIER ############################
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!Ref VPCCIDRBlock, 8, 13]]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PrivateSubnet1",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "private"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [3, !Cidr [!Ref VPCCIDRBlock, 8, 13]]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PrivateSubnet2",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "private"
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [4, !Cidr [!Ref VPCCIDRBlock, 8, 13]]
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PrivateSubnet3",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "private"
+
+  # Private Subnet Route Tables
+  PrivateSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PrivateSubnet1RouteTable",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "private"
+
+  PrivateSubnet1NATRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+      RouteTableId: !Ref PrivateSubnet1RouteTable
+
+  PrivateSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PrivateSubnet2RouteTable",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "private"
+
+  PrivateSubnet2NATRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+      RouteTableId: !Ref PrivateSubnet2RouteTable
+
+  PrivateSubnet3RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "PrivateSubnet3RouteTable",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "private"
+
+  PrivateSubnet3NATRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway3
+      RouteTableId: !Ref PrivateSubnet3RouteTable
+
+  # Private Subnet Route Table Associations
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateSubnet1RouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateSubnet2RouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateSubnet3RouteTable
+      SubnetId: !Ref PrivateSubnet3
+  ############################ END OF PRIVATE TIER ############################
+
+  ############################ BEGIN OF DATABASE TIER ############################
+  # Database Subnets
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [5, !Cidr [!Ref VPCCIDRBlock, 8, 13]]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "DatabaseSubnet1",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "database"
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [6, !Cidr [!Ref VPCCIDRBlock, 8, 13]]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "DatabaseSubnet2",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "database"
+
+  DatabaseSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [7, !Cidr [!Ref VPCCIDRBlock, 8, 13]]
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "DatabaseSubnet3",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "database"
+
+  # Database Subnet Route Tables
+  DatabaseSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "DatabaseSubnet1RouteTable",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "database"
+
+  DatabaseSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "DatabaseSubnet2RouteTable",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "database"
+
+  DatabaseSubnet3RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value:
+            !Join [
+              " ",
+              [
+                !Ref EnvironmentName,
+                "DatabaseSubnet3RouteTable",
+              ],
+            ]
+        - Key: "environment"
+          Value: !Ref EnvironmentName
+        - Key: "tier"
+          Value: "database"
+
+  # Database Subnet Route Table Associations
+  DatabaseSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DatabaseSubnet1RouteTable
+      SubnetId: !Ref DatabaseSubnet1
+
+  DatabaseSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DatabaseSubnet2RouteTable
+      SubnetId: !Ref DatabaseSubnet2
+
+  DatabaseSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DatabaseSubnet3RouteTable
+      SubnetId: !Ref DatabaseSubnet3
+  ############################ END OF DATABASE TIER ############################
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
